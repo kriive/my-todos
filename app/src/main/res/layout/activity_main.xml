@@ -12,11 +12,11 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             app:collapsedTitleTextAppearance="@style/TextAppearance.App.CollapsingToolbar.Collapsed"
+            app:contentScrim="?attr/colorPrimary"
             app:expandedTitleMarginBottom="28dp"
             app:expandedTitleMarginStart="72dp"
             app:expandedTitleTextAppearance="@style/TextAppearance.App.CollapsingToolbar.Expanded"
             app:layout_scrollFlags="scroll|exitUntilCollapsed|snap"
-            app:contentScrim="?attr/colorPrimary"
             app:statusBarScrim="?attr/colorPrimaryVariant">
 
             <com.google.android.material.appbar.MaterialToolbar
@@ -24,9 +24,9 @@
                 style="@style/Widget.MaterialComponents.Toolbar.Primary"
                 android:layout_width="match_parent"
                 android:layout_height="?attr/actionBarSize"
-                app:menu="@menu/main_app_bar"
                 android:elevation="0dp"
                 app:layout_collapseMode="pin"
+                app:menu="@menu/main_app_bar"
                 app:title="My TODOs" />
         </com.google.android.material.appbar.CollapsingToolbarLayout>
 
