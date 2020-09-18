@@ -3,11 +3,16 @@ package com.kriive.mytodos;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
+import android.app.AlarmManager;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
+
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -15,6 +20,8 @@ import android.widget.FrameLayout;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
+import java.util.Date;
 
 public class MainActivity extends AppCompatActivity {
     private final Integer SECOND_ACTIVITY_REQUEST_CODE = 1337;
@@ -43,15 +50,29 @@ public class MainActivity extends AppCompatActivity {
         getSupportFragmentManager().beginTransaction().replace(R.id.fragment, fragment).addToBackStack(null).commit();
     }
 
-    protected void showOrderBy() {
-        String[] singleItems = {"Creation time", "Category", "Due date"};
 
+    protected void showOrderBy() {
+        String[] choice = new String[]{"Due date", "Creation date", "Category"};
         new MaterialAlertDialogBuilder(this)
                 .setTitle("Order by")
-                .setSingleChoiceItems(singleItems, 0, new DialogInterface.OnClickListener() {
+                .setSingleChoiceItems(choice, 0, new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialog, int which) {
-                        Log.d("Selected", String.valueOf(which));
+                        if (fragment == null) {
+                            dialog.dismiss();
+                            return;
+                        }
+                        switch (which) {
+                            case 0:
+                                fragment.orderByDueDate();
+                                break;
+                            case 1:
+                                fragment.orderByCreatedOn();
+                                break;
+                            case 2:
+                                fragment.orderByCategory();
+                                break;
+                        }
                         dialog.dismiss();
                     }
                 }).show();
@@ -61,8 +82,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        createNotificationChannel();
         mContext = this;
+
+        JsonSaver saving = new JsonSaver(this);
+        ToDoManager.getInstance().load(saving);
+        checkEmpty();
 
         MaterialToolbar myToolbar = (MaterialToolbar) findViewById(R.id.topAppBar);
         myToolbar.setOnMenuItemClickListener(new Toolbar.OnMenuItemClickListener() {
@@ -86,8 +111,14 @@ public class MainActivity extends AppCompatActivity {
                 startActivityForResult(intent, SECOND_ACTIVITY_REQUEST_CODE);
             }
         });
+    }
 
-        checkEmpty();
+    @Override
+    protected void onPause() {
+        JsonSaver saving = new JsonSaver(this);
+        ToDoManager.getInstance().save(saving);
+
+        super.onPause();
     }
 
     public void checkEmpty() {
@@ -102,15 +133,34 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == SECOND_ACTIVITY_REQUEST_CODE) {
-            if (resultCode == RESULT_OK) {
-                ToDo todo = (ToDo) data.getSerializableExtra(Intent.EXTRA_TEXT);
-                if (todo != null) {
-                    ToDoManager.getInstance().addToDo(todo);
-                    checkEmpty();
-                }
-            }
-        }
+        checkEmpty();
     }
+
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+
+        CharSequence name = "MyTODOsReminderChannel";
+        String description = "Channel for MyTODOs Reminders";
+        int importance = NotificationManager.IMPORTANCE_DEFAULT;
+        NotificationChannel channel = new NotificationChannel("mytodoReminder", name, importance);
+        channel.setDescription(description);
+
+        NotificationManager notificationManager = getSystemService(NotificationManager.class);
+        notificationManager.createNotificationChannel(channel);
+    }
+
+    public void scheduleNewNotification(final String eventString, final Date dueDate) {
+        Intent intent = new Intent(MainActivity.this, ReminderBroadcastReceiver.class);
+        intent.putExtra("Title", eventString);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(MainActivity.this, 0, intent, 0);
+
+        AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+
+        long twentyFourHours = (60 * 1000 * 60 * 24);
+
+        alarmManager.set(AlarmManager.RTC_WAKEUP, dueDate.getTime() - twentyFourHours, pendingIntent);
+    }
+
 }

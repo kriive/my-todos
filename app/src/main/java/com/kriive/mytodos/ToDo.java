@@ -2,12 +2,20 @@ package com.kriive.mytodos;
 
 import java.io.Serializable;
 import java.util.Date;
+import java.util.Objects;
+import java.util.Random;
 
 public class ToDo implements Serializable {
     private String name;
     private String details;
     private String category;
     private Date dueDate;
+    private Date createdOn;
+    private Integer id = new Random().nextInt();
+
+    public Date getCreatedOn() {
+        return createdOn;
+    }
 
     public Boolean getCompleted() {
         return completed;
@@ -56,5 +64,24 @@ public class ToDo implements Serializable {
         this.details = details;
         this.category = category;
         this.dueDate = dueDate;
+        this.createdOn = new Date();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ToDo)) return false;
+        ToDo toDo = (ToDo) o;
+        return getName().equals(toDo.getName()) &&
+                Objects.equals(getDetails(), toDo.getDetails()) &&
+                Objects.equals(getCategory(), toDo.getCategory()) &&
+                Objects.equals(getDueDate(), toDo.getDueDate()) &&
+                getCreatedOn().equals(toDo.getCreatedOn()) &&
+                id.equals(toDo.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(getName(), getDetails(), getCategory(), getDueDate(), getCreatedOn(), id);
     }
 }

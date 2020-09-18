@@ -1,10 +1,18 @@
 package com.kriive.mytodos;
 
+import android.app.Activity;
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 
+import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -13,6 +21,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import java.util.ArrayList;
+import java.util.Date;
 
 /**
  * A fragment representing a list of Items.
@@ -20,20 +29,23 @@ import java.util.ArrayList;
 public class ToDoFragment extends Fragment {
     private static final String ARG_COLUMN_COUNT = "column-count";
 
-    private int mColumnCount = 1;
     private ArrayList<ToDo> mDataset;
-    private MyToDoRecyclerViewAdapter adapter;
+    private MyAdapterSortedList mAdapter;
+    private RecyclerView recyclerView;
 
     public ToDoFragment() {
     }
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public void orderByCategory() {
+        mAdapter.orderByCategory();
+    }
 
-        if (getArguments() != null) {
-            mColumnCount = getArguments().getInt(ARG_COLUMN_COUNT);
-        }
+    public void orderByCreatedOn() {
+        mAdapter.orderByCreatedOn();
+    }
+
+    public void orderByDueDate() {
+        mAdapter.orderByDueDate();
     }
 
     @Override
@@ -42,34 +54,106 @@ public class ToDoFragment extends Fragment {
         View view = inflater.inflate(R.layout.fragment_item_list, container, false);
 
         // Set the adapter
-        if (view instanceof RecyclerView) {
-            Context context = view.getContext();
-            RecyclerView recyclerView = (RecyclerView) view;
-            if (mColumnCount <= 1) {
-                recyclerView.setLayoutManager(new LinearLayoutManager(context));
-            } else {
-                recyclerView.setLayoutManager(new GridLayoutManager(context, mColumnCount));
+        if (!(view instanceof RecyclerView)) {
+            return view;
+        }
+
+        Context context = view.getContext();
+        recyclerView = (RecyclerView) view;
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(context));
+
+        mAdapter = new MyAdapterSortedList(context);
+
+        recyclerView.setAdapter(mAdapter);
+        mAdapter.add(ToDoManager.getInstance().getList());
+
+        ToDoManager.getInstance().setOnAddListener(new ToDoManager.OnAddListener() {
+            @Override
+            public void onAdd(final ToDo pos) {
+                mAdapter.add(pos);
+                recyclerView.scrollToPosition(0);
+                if (pos.getDueDate() != null && (pos.getDueDate().compareTo(new Date()) > 0)){
+                    ((MainActivity) getActivity()).scheduleNewNotification(pos.getName(), pos.getDueDate());
+                }
+            }
+        });
+
+        ToDoManager.getInstance().setOnDeleteListener(new ToDoManager.OnDeleteListener() {
+            @Override
+            public void onDelete(final ToDo pos) {
+                mAdapter.remove(pos);
+            }
+        });
+
+        ToDoManager.getInstance().setOnEditListener(new ToDoManager.OnEditListener() {
+            @Override
+            public void onEdit(ToDo todo) {
+                mAdapter.remove(todo);
+                mAdapter.add(todo);
+            }
+        });
+
+        mAdapter.setOnEntryClickListener(new MyAdapterSortedList.OnEntryClickListener() {
+            @Override
+            public void onEntryClick(ToDo todo) {
+                ToDoManager.getInstance().markToDo(todo, !todo.getCompleted());
+            }
+        });
+
+        deleteTodoItem();
+
+        return view;
+    }
+
+    private void deleteTodoItem() {
+        //Swipe to delete currentTodo Item
+        new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(0,
+                ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+
+            private ColorDrawable background = new ColorDrawable(Color.RED);
+
+
+            @Override
+            public boolean onMove(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder, RecyclerView.ViewHolder target) {
+                return false;
             }
 
-            adapter = new MyToDoRecyclerViewAdapter(ToDoManager.getInstance().getList());
-            ToDoManager.getInstance().setOnAddListener(new ToDoManager.OnAddListener() {
-                @Override
-                public void onAdd(Integer pos) {
-                    ((MainActivity) getActivity()).showList();
-                    adapter.notifyItemInserted(pos);
+            @Override
+            public void onSwiped(RecyclerView.ViewHolder viewHolder, int direction) {
+                ToDoManager.getInstance().removeToDo(((MyAdapterSortedList.ToDoViewHolder) viewHolder).todo);
+                Activity act = getActivity();
+                if (act instanceof MainActivity) {
+                    ((MainActivity) act).checkEmpty();
                 }
-            });
-            ToDoManager.getInstance().setOnDeleteListener(new ToDoManager.OnDeleteListener() {
-                @Override
-                public void onDelete(Integer pos) {
-                    if (ToDoManager.getInstance().isEmpty()) {
-                        ((MainActivity) getActivity()).showIllustration();
-                    }
-                    adapter.notifyItemRemoved(pos);
+            }
+
+            @Override
+            public void onChildDraw(@NonNull Canvas c, @NonNull RecyclerView recyclerView,
+                                    @NonNull RecyclerView.ViewHolder viewHolder, float dX, float dY,
+                                    int actionState, boolean isCurrentlyActive) {
+                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive);
+                View itemView = viewHolder.itemView;
+
+                if (viewHolder instanceof MyAdapterSortedList.HeaderViewHolder) {
+                    itemView = itemView.findViewById(R.id.data_control);
                 }
-            });
-            recyclerView.setAdapter(adapter);
-        }
-        return view;
+
+                int backgroundCornerOffset = 60;
+
+                if (dX > 0) { // Swiping to the right
+                    background.setBounds(itemView.getLeft() - 60, itemView.getTop(),
+                            itemView.getLeft() + ((int) dX) + backgroundCornerOffset,
+                            itemView.getBottom());
+
+                } else if (dX < 0) { // Swiping to the left
+                    background.setBounds(itemView.getRight() + ((int) dX) - backgroundCornerOffset,
+                            itemView.getTop(), itemView.getRight() + 60, itemView.getBottom());
+                } else { // view is unSwiped
+                    background.setBounds(0, 0, 0, 0);
+                }
+                background.draw(c);
+            }
+        }).attachToRecyclerView(recyclerView);
     }
 }
